@@ -1,0 +1,6 @@
+{
+  "name": "Galaga Invaders: Void Recon",
+  "description": "An arcade space shooter inspired by Space Invaders and Galaga featuring procedural vector graphics, dive-bomber alien AI, boss battles, heat mechanics, and power-up progression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

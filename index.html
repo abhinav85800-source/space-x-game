@@ -1,0 +1,2752 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Galaga Invaders: Void Recon - Captain Abhinav</title>
+  <meta name="description" content="An arcade space shooter inspired by Space Invaders and Galaga featuring Captain Abhinav voice comms, procedural vector graphics, dive-bomber alien AI, boss battles, heat mechanics, and power-up progression." />
+  <meta property="og:title" content="Galaga Invaders: Void Recon - Captain Abhinav" />
+  <meta property="og:description" content="An arcade space shooter inspired by Space Invaders and Galaga featuring Captain Abhinav voice comms, procedural vector graphics, dive-bomber alien AI, boss battles, heat mechanics, and power-up progression." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    :root {
+      --bg-void: #030408;
+      --cyan-neon: #00f0ff;
+      --magenta-neon: #ff0077;
+      --amber-neon: #ffdf00;
+      --emerald-neon: #00ff88;
+      --crimson-alert: #ff3344;
+      --font-arcade: 'Courier New', Courier, monospace;
+    }
+
+    body {
+      background-color: var(--bg-void);
+      color: #e2e8f0;
+      font-family: var(--font-arcade);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #02040a;
+    }
+
+    /* Strict aspect ratio wrapper: prevents canvas distortion on any display */
+    #canvas-wrapper {
+      position: relative;
+      width: min(100vw, calc(100vh * (800 / 960)));
+      height: min(100vh, calc(100vw * (960 / 800)));
+      max-width: 800px;
+      max-height: 960px;
+      aspect-ratio: 800 / 960;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 50px rgba(0, 240, 255, 0.15), 0 0 100px rgba(0, 0, 0, 0.95);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      background: radial-gradient(circle at center, #0b1126 0%, #030408 100%);
+      overflow: hidden;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Subtle CRT Scanline Overlay */
+    .crt-overlay {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%),
+                  radial-gradient(circle at center, transparent 65%, rgba(0, 0, 0, 0.65) 100%);
+      background-size: 100% 4px, 100% 100%;
+      z-index: 20;
+      opacity: 0.75;
+    }
+
+    /* Captain Abhinav Fleet Radio Comms Box (Top Center Subtitles) */
+    #radio-comms-box {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      width: 90%;
+      max-width: 580px;
+      background: rgba(4, 10, 24, 0.92);
+      border: 1.5px solid var(--cyan-neon);
+      border-radius: 6px;
+      padding: 8px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 26;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.3), inset 0 0 10px rgba(0, 240, 255, 0.15);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    #radio-comms-box.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .comms-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--amber-neon);
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+      padding-bottom: 3px;
+    }
+
+    .comms-beacon {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .comms-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--emerald-neon);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--emerald-neon);
+      animation: pulse-beacon 0.8s infinite alternate;
+    }
+
+    @keyframes pulse-beacon {
+      from { opacity: 0.4; transform: scale(0.85); }
+      to { opacity: 1; transform: scale(1.2); }
+    }
+
+    .comms-text {
+      font-size: clamp(0.78rem, 1.9vw, 0.95rem);
+      font-weight: bold;
+      color: #ffffff;
+      line-height: 1.35;
+      text-shadow: 0 0 6px rgba(0, 240, 255, 0.8);
+      letter-spacing: 0.5px;
+    }
+
+    /* UI Overlay Layers */
+    .overlay-layer {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      background: rgba(3, 5, 15, 0.88);
+      backdrop-filter: blur(5px);
+      padding: 20px;
+      text-align: center;
+      overflow-y: auto;
+    }
+
+    .overlay-layer.hidden {
+      display: none !important;
+    }
+
+    /* Typography & Arcade UI */
+    .game-title {
+      font-size: clamp(1.8rem, 4.5vw, 3rem);
+      font-weight: 900;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #ffffff;
+      text-shadow: 0 0 10px var(--cyan-neon), 0 0 25px var(--cyan-neon);
+      margin-bottom: 4px;
+    }
+
+    .game-subtitle {
+      font-size: clamp(0.75rem, 1.8vw, 1rem);
+      color: var(--amber-neon);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      text-shadow: 0 0 8px rgba(255, 223, 0, 0.6);
+    }
+
+    .captain-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 223, 0, 0.12);
+      border: 1px solid var(--amber-neon);
+      color: var(--amber-neon);
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      box-shadow: 0 0 12px rgba(255, 223, 0, 0.3);
+    }
+
+    .retro-card {
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      background: rgba(0, 20, 40, 0.65);
+      padding: 12px 18px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.1);
+    }
+
+    .alien-showcase {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.8rem;
+      text-align: left;
+    }
+
+    .alien-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .alien-icon {
+      font-size: 1.1rem;
+      margin-right: 8px;
+    }
+
+    .alien-name {
+      color: #cbd5e1;
+      font-weight: bold;
+    }
+
+    .alien-pts {
+      color: var(--amber-neon);
+      font-weight: bold;
+      text-shadow: 0 0 5px var(--amber-neon);
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      text-align: left;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .control-pip {
+      width: 6px;
+      height: 6px;
+      background: var(--cyan-neon);
+      box-shadow: 0 0 6px var(--cyan-neon);
+      display: inline-block;
+    }
+
+    .btn-arcade {
+      appearance: none;
+      background: transparent;
+      color: #ffffff;
+      border: 2px solid var(--cyan-neon);
+      padding: 12px 34px;
+      font-family: inherit;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.35), inset 0 0 10px rgba(0, 240, 255, 0.15);
+      transition: all 0.15s ease-in-out;
+      outline: none;
+      margin-top: 6px;
+    }
+
+    .btn-arcade:hover {
+      background: var(--cyan-neon);
+      color: #03050f;
+      box-shadow: 0 0 30px var(--cyan-neon);
+      transform: scale(1.04);
+    }
+
+    .btn-arcade:active {
+      transform: scale(0.96);
+    }
+
+    .stats-table {
+      width: 100%;
+      margin: 8px 0;
+      font-size: 0.88rem;
+    }
+
+    .stats-table tr {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .stat-val {
+      font-weight: bold;
+      color: var(--amber-neon);
+      text-shadow: 0 0 5px var(--amber-neon);
+    }
+
+    /* Top Action Bar (Sound, Voice & Pause) */
+    #top-bar {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 8px;
+      z-index: 25;
+    }
+
+    .icon-btn {
+      background: rgba(10, 20, 35, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      color: #94a3b8;
+      width: 38px;
+      height: 38px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      font-weight: bold;
+      transition: all 0.15s ease;
+    }
+
+    .icon-btn:hover {
+      color: #fff;
+      border-color: var(--cyan-neon);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+    }
+
+    /* Mobile Controls */
+    #mobile-controls {
+      position: absolute;
+      bottom: 16px;
+      left: 0;
+      right: 0;
+      display: none;
+      justify-content: space-between;
+      padding: 0 20px;
+      pointer-events: none;
+      z-index: 25;
+    }
+
+    @media (pointer: coarse), (max-width: 768px) {
+      #mobile-controls {
+        display: flex;
+      }
+    }
+
+    .dpad, .action-pad {
+      display: flex;
+      gap: 12px;
+      pointer-events: auto;
+    }
+
+    .touch-btn {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      background: rgba(15, 25, 45, 0.75);
+      border: 2px solid rgba(0, 240, 255, 0.4);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: bold;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+    }
+
+    .touch-btn:active {
+      background: rgba(0, 240, 255, 0.35);
+      transform: scale(0.92);
+    }
+
+    .fire-touch-btn {
+      width: 72px;
+      height: 72px;
+      border-color: var(--magenta-neon);
+      box-shadow: 0 0 15px rgba(255, 0, 119, 0.35);
+    }
+
+    .fire-touch-btn:active {
+      background: rgba(255, 0, 119, 0.45);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div id="canvas-wrapper">
+      <canvas id="gameCanvas" width="800" height="960"></canvas>
+      <div class="crt-overlay"></div>
+
+      <!-- Holographic Radio Comms Box for Voice & Captions -->
+      <div id="radio-comms-box">
+        <div class="comms-header">
+          <div class="comms-beacon">
+            <span class="comms-dot"></span>
+            <span id="comms-sender">FLEET TRANSMISSION</span>
+          </div>
+          <span style="color: var(--cyan-neon);">CAPTAIN ABHINAV COMM-LINK</span>
+        </div>
+        <div id="comms-message" class="comms-text">
+          "Wow! Captain Abhinav is coming! Watch out! Watch out! Follow Captain's command!"
+        </div>
+      </div>
+
+      <!-- Top action bar -->
+      <div id="top-bar">
+        <button id="btn-voice" class="icon-btn" title="Toggle Captain Abhinav Voice (V)">🎙️</button>
+        <button id="btn-sound" class="icon-btn" title="Toggle Sound SFX (M)">🔊</button>
+        <button id="btn-pause" class="icon-btn" title="Pause Game (P)">⏸</button>
+      </div>
+
+      <!-- START SCREEN -->
+      <div id="screen-start" class="overlay-layer">
+        <h1 class="game-title">GALAGA INVADERS</h1>
+        <div class="game-subtitle">VOID RECON VECTORED</div>
+
+        <div class="captain-badge">
+          <span>🚀 COMMANDER:</span>
+          <span>CAPTAIN ABHINAV IN CONTROL</span>
+        </div>
+
+        <div class="retro-card">
+          <div class="alien-showcase">
+            <div class="alien-row">
+              <span class="alien-icon" style="color: #ff0077;">👾</span>
+              <span class="alien-name">DRONE INVADER</span>
+              <span class="alien-pts">100 PTS</span>
+            </div>
+            <div class="alien-row">
+              <span class="alien-icon" style="color: #38bdf8;">🛸</span>
+              <span class="alien-name">WASP DIVE-BOMBER</span>
+              <span class="alien-pts">150 PTS</span>
+            </div>
+            <div class="alien-row">
+              <span class="alien-icon" style="color: #ffdf00;">👑</span>
+              <span class="alien-name">COMMANDER (DIVE x2)</span>
+              <span class="alien-pts">200 / 400 PTS</span>
+            </div>
+            <div class="alien-row">
+              <span class="alien-icon" style="color: #ff3344;">⚡</span>
+              <span class="alien-name">BOSS DREADNOUGHT</span>
+              <span class="alien-pts">3000 PTS</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="retro-card">
+          <div class="controls-grid">
+            <div class="control-item"><span class="control-pip"></span><span>[A/D] / [◀/▶] Move</span></div>
+            <div class="control-item"><span class="control-pip"></span><span>[SPACE] Shoot</span></div>
+            <div class="control-item"><span class="control-pip"></span><span>[P / ESC] Pause</span></div>
+            <div class="control-item"><span class="control-pip"></span><span>[M] Toggle Audio</span></div>
+            <div class="control-item"><span class="control-pip"></span><span>[V] Voice Comms</span></div>
+            <div class="control-item"><span class="control-pip"></span><span>Mouse/Touch Drag</span></div>
+          </div>
+        </div>
+
+        <div class="retro-card" style="font-size: 0.78rem; color: #a5b4fc; text-align: left; padding: 10px 16px;">
+          <p style="margin-bottom: 4px;">🎙️ <strong>VOICE COMMS ONLINE:</strong></p>
+          <p style="margin-bottom: 3px;">• "Wow! Captain Abhinav is coming! Watch out! Watch out!"</p>
+          <p style="margin-bottom: 3px;">• "Well done, Captain Abhinav!" on victories & high combos.</p>
+          <p>• "All fleet wings, follow Captain Abhinav's command!"</p>
+        </div>
+
+        <button id="btn-start" class="btn-arcade">ENGAGE MISSION</button>
+      </div>
+
+      <!-- PAUSE SCREEN -->
+      <div id="screen-pause" class="overlay-layer hidden">
+        <h2 class="game-title" style="font-size: 2.2rem; color: var(--amber-neon);">MISSION PAUSED</h2>
+        <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">ALL SYSTEMS ON STANDBY - CAPTAIN ABHINAV WAITING</p>
+        <button id="btn-resume" class="btn-arcade">RESUME COMBAT</button>
+        <button id="btn-restart-from-pause" class="btn-arcade" style="margin-top: 12px; font-size: 0.85rem; border-color: #64748b; color: #cbd5e1;">ABORT & RESTART</button>
+      </div>
+
+      <!-- GAME OVER SCREEN -->
+      <div id="screen-game-over" class="overlay-layer hidden">
+        <h2 class="game-title" style="color: var(--crimson-alert); text-shadow: 0 0 15px var(--crimson-alert);">HULL DESTROYED</h2>
+        <div class="game-subtitle" style="color: #cbd5e1;">RECON SHIP TERMINATED</div>
+
+        <div class="retro-card">
+          <table class="stats-table">
+            <tbody>
+              <tr><td>FINAL SCORE</td><td id="over-score" class="stat-val">00000</td></tr>
+              <tr><td>HIGH SCORE</td><td id="over-high-score" class="stat-val">00000</td></tr>
+              <tr><td>WAVE REACHED</td><td id="over-wave" class="stat-val">1</td></tr>
+              <tr><td>MAX COMBO</td><td id="over-combo" class="stat-val">1x</td></tr>
+              <tr><td>ENEMIES KILLED</td><td id="over-kills" class="stat-val">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <button id="btn-play-again" class="btn-arcade">DEPLOY REPLACEMENT</button>
+      </div>
+
+      <!-- Mobile Touch Controls -->
+      <div id="mobile-controls">
+        <div class="dpad">
+          <button id="touch-left" class="touch-btn" aria-label="Left">◀</button>
+          <button id="touch-right" class="touch-btn" aria-label="Right">▶</button>
+        </div>
+        <div class="action-pad">
+          <button id="touch-fire" class="touch-btn fire-touch-btn" aria-label="Fire">⚡</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * GALAGA INVADERS: VOID RECON - CAPTAIN ABHINAV EDITION
+     * Complete procedural vector arcade space combat game.
+     * Features:
+     * - Web Speech Synthesis for dynamic Captain Abhinav voice comms:
+     *   "Wow! Captain Abhinav is coming! Watch out! Watch out! Follow Captain's command!"
+     *   "Well done, Captain Abhinav!"
+     * - Real-time animated holographic on-screen transmission captions.
+     * - Web Audio API procedural sound engine (0 external audio files).
+     * - Galaga Bézier dive-bombers & Space Invaders swarm progression.
+     * - Boss Dreadnought with destructible pods, spread shots & laser beam.
+     * - Heat management, power-ups, shields, combos & particle explosions.
+     */
+
+    // --- CAPTAIN ABHINAV VOICE & TRANSMISSION CAPTION MANAGER ---
+    class VoiceCommsManager {
+      constructor() {
+        this.synth = window.speechSynthesis || null;
+        this.enabled = true;
+        this.commsBox = document.getElementById('radio-comms-box');
+        this.commsSender = document.getElementById('comms-sender');
+        this.commsMsg = document.getElementById('comms-message');
+        this.captionTimeout = null;
+        this.lastCallTimes = {};
+      }
+
+      toggleVoice() {
+        this.enabled = !this.enabled;
+        if (!this.enabled && this.synth) {
+          this.synth.cancel();
+        }
+        return this.enabled;
+      }
+
+      speak(text, sender = 'FLEET COMMAND', options = {}) {
+        const { minInterval = 0, key = null, priority = false } = options;
+
+        const now = Date.now();
+        if (key && this.lastCallTimes[key] && now - this.lastCallTimes[key] < minInterval) {
+          return;
+        }
+        if (key) {
+          this.lastCallTimes[key] = now;
+        }
+
+        // Display on-screen holographic caption
+        this.showCaption(text, sender);
+
+        // Native Web Speech Synthesis
+        if (!this.enabled || !this.synth) return;
+
+        try {
+          if (priority) {
+            this.synth.cancel();
+          }
+
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.rate = 1.05;
+          utter.pitch = 1.15;
+          utter.volume = 1.0;
+          utter.lang = 'en-US';
+
+          // Pick an English voice if available
+          const voices = this.synth.getVoices();
+          if (voices && voices.length > 0) {
+            const engVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('David')));
+            if (engVoice) utter.voice = engVoice;
+          }
+
+          this.synth.speak(utter);
+        } catch (e) {
+          console.warn('Speech synthesis unavailable:', e);
+        }
+      }
+
+      showCaption(text, sender) {
+        if (!this.commsBox || !this.commsMsg) return;
+
+        this.commsSender.textContent = sender;
+        this.commsMsg.textContent = `"${text}"`;
+        this.commsBox.classList.add('active');
+
+        if (this.captionTimeout) {
+          clearTimeout(this.captionTimeout);
+        }
+
+        const displayTime = Math.max(3000, text.length * 68);
+        this.captionTimeout = setTimeout(() => {
+          this.commsBox.classList.remove('active');
+        }, displayTime);
+      }
+    }
+
+    const voice = new VoiceCommsManager();
+
+    // --- SYNTHESIZED SOUND EFFECTS ENGINE ---
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            this.ctx = new AudioContextClass();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      toggleMute() {
+        this.muted = !this.muted;
+        return this.muted;
+      }
+
+      playLaserShoot() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(220, now + 0.12);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.12);
+      }
+
+      playTripleShoot() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1100, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.14);
+
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.14);
+      }
+
+      playEnemyLaser() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(420, now);
+        osc.frequency.linearRampToValueAtTime(160, now + 0.18);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.18);
+      }
+
+      playExplosion(type = 'small') {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const dur = type === 'boss' ? 1.4 : type === 'player' ? 0.8 : 0.28;
+
+        const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+
+        const whiteNoise = this.ctx.createBufferSource();
+        whiteNoise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(type === 'boss' ? 450 : 900, now);
+        filter.frequency.linearRampToValueAtTime(40, now + dur);
+
+        const gain = this.ctx.createGain();
+        const startVol = type === 'boss' ? 0.45 : type === 'player' ? 0.35 : 0.2;
+        gain.gain.setValueAtTime(startVol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        whiteNoise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        whiteNoise.start(now);
+      }
+
+      playPowerup() {
+        if (this.muted || !this.ctx) return;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const startTime = this.ctx.currentTime + idx * 0.06;
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, startTime);
+
+          gain.gain.setValueAtTime(0.18, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.18);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(startTime);
+          osc.stop(startTime + 0.18);
+        });
+      }
+
+      playDiveSiren() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(950, now);
+        osc.frequency.linearRampToValueAtTime(450, now + 0.25);
+
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.25);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+
+      playOverheatBuzz() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(95, now);
+
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+
+      playBossWarning() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        for (let i = 0; i < 3; i++) {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const t = now + i * 0.3;
+
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, t);
+          osc.frequency.setValueAtTime(440, t + 0.15);
+
+          gain.gain.setValueAtTime(0.2, t);
+          gain.gain.exponentialRampToValueAtTime(0.01, t + 0.28);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(t);
+          osc.stop(t + 0.28);
+        }
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    // --- GAME CONSTANTS ---
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 960;
+
+    const STATE = {
+      START_SCREEN: 'START_SCREEN',
+      PLAYING: 'PLAYING',
+      PAUSED: 'PAUSED',
+      GAME_OVER: 'GAME_OVER'
+    };
+
+    const POWERUP_TYPES = {
+      TRIPLE: { code: 'T', name: 'TRIPLE SHOT', color: '#00f0ff', duration: 8 },
+      LASER: { code: 'L', name: 'LASER BEAM', color: '#ff0077', duration: 3 },
+      SHIELD: { code: 'S', name: 'SHIELD RECHARGE', color: '#00ff88', duration: 0 },
+      OVERCLOCK: { code: 'O', name: 'OVERCLOCK', color: '#ffdf00', duration: 5 }
+    };
+
+    // --- STARFIELD BACKDROP ENGINE ---
+    class Starfield {
+      constructor(width, height) {
+        this.width = width;
+        this.height = height;
+        this.stars = [];
+        this.nebulae = [];
+
+        for (let i = 0; i < 90; i++) {
+          this.stars.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            size: 0.8 + Math.random() * 0.6,
+            speed: 25 + Math.random() * 20,
+            alpha: 0.3 + Math.random() * 0.4,
+            color: '#64748b'
+          });
+        }
+        for (let i = 0; i < 55; i++) {
+          this.stars.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            size: 1.5 + Math.random() * 1.0,
+            speed: 55 + Math.random() * 40,
+            alpha: 0.6 + Math.random() * 0.3,
+            color: '#38bdf8'
+          });
+        }
+        for (let i = 0; i < 25; i++) {
+          this.stars.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            size: 2.2 + Math.random() * 1.5,
+            speed: 130 + Math.random() * 80,
+            alpha: 0.85 + Math.random() * 0.15,
+            color: '#ffffff'
+          });
+        }
+
+        for (let i = 0; i < 3; i++) {
+          this.nebulae.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            radius: 180 + Math.random() * 150,
+            color: i % 2 === 0 ? 'rgba(99, 102, 241, 0.04)' : 'rgba(236, 72, 153, 0.04)',
+            speed: 12 + Math.random() * 8
+          });
+        }
+      }
+
+      update(dt) {
+        for (const star of this.stars) {
+          star.y += star.speed * dt;
+          if (star.y > this.height) {
+            star.y = 0;
+            star.x = Math.random() * this.width;
+          }
+        }
+        for (const neb of this.nebulae) {
+          neb.y += neb.speed * dt;
+          if (neb.y - neb.radius > this.height) {
+            neb.y = -neb.radius;
+            neb.x = Math.random() * this.width;
+          }
+        }
+      }
+
+      draw(ctx) {
+        for (const neb of this.nebulae) {
+          const grad = ctx.createRadialGradient(neb.x, neb.y, 10, neb.x, neb.y, neb.radius);
+          grad.addColorStop(0, neb.color);
+          grad.addColorStop(1, 'transparent');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(neb.x, neb.y, neb.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (const star of this.stars) {
+          ctx.fillStyle = star.color;
+          ctx.globalAlpha = star.alpha;
+          ctx.fillRect(star.x, star.y, star.size, star.size * (star.speed > 100 ? 2.5 : 1));
+        }
+        ctx.globalAlpha = 1.0;
+      }
+    }
+
+    // --- PARTICLE ENGINE ---
+    class ParticleEngine {
+      constructor() {
+        this.particles = [];
+      }
+
+      emit(x, y, count, options = {}) {
+        const {
+          color = '#00f0ff',
+          speedMin = 50,
+          speedMax = 280,
+          lifeMin = 0.3,
+          lifeMax = 0.9,
+          sizeMin = 1.5,
+          sizeMax = 4.0,
+          drag = 0.94,
+          glow = true
+        } = options;
+
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = speedMin + Math.random() * (speedMax - speedMin);
+          const maxLife = lifeMin + Math.random() * (lifeMax - lifeMin);
+          this.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: maxLife,
+            maxLife,
+            size: sizeMin + Math.random() * (sizeMax - sizeMin),
+            color,
+            drag,
+            glow
+          });
+        }
+      }
+
+      emitRing(x, y, radius, color = '#ffdf00') {
+        const count = 32;
+        for (let i = 0; i < count; i++) {
+          const angle = (i / count) * Math.PI * 2;
+          const speed = 180;
+          this.particles.push({
+            x: x + Math.cos(angle) * radius,
+            y: y + Math.sin(angle) * radius,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.5,
+            maxLife: 0.5,
+            size: 3,
+            color,
+            drag: 0.95,
+            glow: true
+          });
+        }
+      }
+
+      update(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.life -= dt;
+          if (p.life <= 0) {
+            this.particles.splice(i, 1);
+            continue;
+          }
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= Math.pow(p.drag, dt * 60);
+          p.vy *= Math.pow(p.drag, dt * 60);
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        for (const p of this.particles) {
+          const progress = p.life / p.maxLife;
+          ctx.globalAlpha = Math.max(0, progress);
+          ctx.fillStyle = p.color;
+
+          if (p.glow) {
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = p.color;
+          }
+
+          const curSize = p.size * progress;
+          ctx.fillRect(p.x - curSize / 2, p.y - curSize / 2, curSize, curSize);
+        }
+        ctx.restore();
+      }
+    }
+
+    // --- FLOATING TEXT ENGINE ---
+    class FloatingTextEngine {
+      constructor() {
+        this.texts = [];
+      }
+
+      add(x, y, text, color = '#ffdf00', size = 16) {
+        this.texts.push({
+          x,
+          y,
+          text,
+          color,
+          size,
+          life: 1.2,
+          maxLife: 1.2,
+          vy: -60
+        });
+      }
+
+      update(dt) {
+        for (let i = this.texts.length - 1; i >= 0; i--) {
+          const item = this.texts[i];
+          item.life -= dt;
+          if (item.life <= 0) {
+            this.texts.splice(i, 1);
+            continue;
+          }
+          item.y += item.vy * dt;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 16px "Courier New", monospace';
+        for (const item of this.texts) {
+          const alpha = item.life / item.maxLife;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = item.color;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = item.color;
+          ctx.fillText(item.text, item.x, item.y);
+        }
+        ctx.restore();
+      }
+    }
+
+    // --- PLAYER SHIP SYSTEM ---
+    class PlayerShip {
+      constructor(canvasWidth, canvasHeight) {
+        this.canvasWidth = canvasWidth;
+        this.canvasHeight = canvasHeight;
+        this.width = 44;
+        this.height = 48;
+        this.x = canvasWidth / 2;
+        this.y = canvasHeight - 90;
+        this.baseSpeed = 460;
+        this.speed = this.baseSpeed;
+        this.vx = 0;
+
+        this.maxShields = 3;
+        this.shields = 3;
+        this.invulnerableTimer = 0;
+
+        this.heat = 0;
+        this.heatPerShot = 13;
+        this.coolingRate = 32;
+        this.isOverheated = false;
+        this.overheatDuration = 2.0;
+        this.overheatTimer = 0;
+        this.fireCooldown = 0.16;
+        this.fireTimer = 0;
+
+        this.activePowerups = {
+          triple: 0,
+          laser: 0,
+          overclock: 0
+        };
+
+        this.flameTimer = 0;
+      }
+
+      reset() {
+        this.x = this.canvasWidth / 2;
+        this.y = this.canvasHeight - 90;
+        this.vx = 0;
+        this.shields = 3;
+        this.heat = 0;
+        this.isOverheated = false;
+        this.overheatTimer = 0;
+        this.invulnerableTimer = 0;
+        this.activePowerups.triple = 0;
+        this.activePowerups.laser = 0;
+        this.activePowerups.overclock = 0;
+      }
+
+      applyPowerup(type) {
+        if (type === 'TRIPLE') {
+          this.activePowerups.triple = POWERUP_TYPES.TRIPLE.duration;
+        } else if (type === 'LASER') {
+          this.activePowerups.laser = POWERUP_TYPES.LASER.duration;
+        } else if (type === 'SHIELD') {
+          this.shields = Math.min(this.maxShields, this.shields + 1);
+        } else if (type === 'OVERCLOCK') {
+          this.activePowerups.overclock = POWERUP_TYPES.OVERCLOCK.duration;
+        }
+      }
+
+      takeDamage(amount = 1) {
+        if (this.invulnerableTimer > 0) return false;
+        this.shields -= amount;
+        this.invulnerableTimer = 1.6;
+        return true;
+      }
+
+      update(dt, input, targetX, particles) {
+        this.flameTimer += dt * 25;
+
+        if (this.activePowerups.triple > 0) this.activePowerups.triple -= dt;
+        if (this.activePowerups.laser > 0) this.activePowerups.laser -= dt;
+        if (this.activePowerups.overclock > 0) this.activePowerups.overclock -= dt;
+        if (this.invulnerableTimer > 0) this.invulnerableTimer -= dt;
+
+        const speedMultiplier = this.activePowerups.overclock > 0 ? 1.35 : 1.0;
+        this.speed = this.baseSpeed * speedMultiplier;
+
+        let moveDir = 0;
+        if (input.left) moveDir -= 1;
+        if (input.right) moveDir += 1;
+
+        if (moveDir !== 0) {
+          const targetVx = moveDir * this.speed;
+          this.vx += (targetVx - this.vx) * Math.min(1, dt * 18);
+          this.x += this.vx * dt;
+        } else if (targetX !== null) {
+          const dx = targetX - this.x;
+          this.x += dx * Math.min(1, dt * 15);
+          this.vx = dx * 10;
+        } else {
+          this.vx *= Math.pow(0.85, dt * 60);
+          this.x += this.vx * dt;
+        }
+
+        const halfW = this.width / 2;
+        if (this.x < halfW + 12) {
+          this.x = halfW + 12;
+          this.vx = 0;
+        } else if (this.x > this.canvasWidth - halfW - 12) {
+          this.x = this.canvasWidth - halfW - 12;
+          this.vx = 0;
+        }
+
+        if (this.isOverheated) {
+          this.overheatTimer -= dt;
+          this.heat = Math.max(0, (this.overheatTimer / this.overheatDuration) * 100);
+          if (this.overheatTimer <= 0) {
+            this.isOverheated = false;
+            this.heat = 0;
+          }
+          if (Math.random() < 0.35) {
+            particles.emit(this.x + (Math.random() * 20 - 10), this.y - 10, 1, {
+              color: '#ff3344',
+              speedMin: 15,
+              speedMax: 45,
+              lifeMin: 0.3,
+              lifeMax: 0.6,
+              sizeMin: 2,
+              sizeMax: 4,
+              drag: 0.9
+            });
+          }
+        } else {
+          const coolRate = this.coolingRate * (this.activePowerups.overclock > 0 ? 1.6 : 1.0);
+          this.heat = Math.max(0, this.heat - coolRate * dt);
+        }
+
+        if (this.fireTimer > 0) {
+          this.fireTimer -= dt;
+        }
+      }
+
+      canShoot() {
+        return !this.isOverheated && this.fireTimer <= 0;
+      }
+
+      registerShot() {
+        const overclock = this.activePowerups.overclock > 0;
+        const cooldown = (this.activePowerups.laser > 0 ? 0.05 : this.fireCooldown) * (overclock ? 0.55 : 1.0);
+        this.fireTimer = cooldown;
+
+        if (this.activePowerups.laser <= 0) {
+          const heatAdd = this.heatPerShot * (overclock ? 0.45 : 1.0);
+          this.heat += heatAdd;
+          if (this.heat >= 100) {
+            this.heat = 100;
+            this.isOverheated = true;
+            this.overheatTimer = this.overheatDuration;
+            sound.playOverheatBuzz();
+            voice.speak("Watch out, Captain Abhinav! Weapon overheated!", "SYSTEM WARNING", {
+              minInterval: 6000,
+              key: 'overheat'
+            });
+          }
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (this.invulnerableTimer > 0 && Math.floor(this.invulnerableTimer * 12) % 2 === 0) {
+          ctx.globalAlpha = 0.35;
+        }
+
+        const flameLength = 14 + Math.sin(this.flameTimer) * 6;
+        const flameGrad = ctx.createLinearGradient(0, 16, 0, 16 + flameLength);
+        flameGrad.addColorStop(0, '#00f0ff');
+        flameGrad.addColorStop(0.5, '#3b82f6');
+        flameGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = flameGrad;
+
+        ctx.beginPath();
+        ctx.moveTo(-10, 18);
+        ctx.lineTo(-6, 18 + flameLength);
+        ctx.lineTo(-2, 18);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(2, 18);
+        ctx.lineTo(6, 18 + flameLength);
+        ctx.lineTo(10, 18);
+        ctx.fill();
+
+        const hullGlow = this.activePowerups.overclock > 0 ? '#ffdf00' : '#00f0ff';
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = hullGlow;
+        ctx.strokeStyle = hullGlow;
+        ctx.lineWidth = 2.5;
+        ctx.fillStyle = '#061325';
+
+        ctx.beginPath();
+        ctx.moveTo(0, -24);
+        ctx.lineTo(12, -4);
+        ctx.lineTo(24, 14);
+        ctx.lineTo(15, 18);
+        ctx.lineTo(8, 14);
+        ctx.lineTo(0, 19);
+        ctx.lineTo(-8, 14);
+        ctx.lineTo(-15, 18);
+        ctx.lineTo(-24, 14);
+        ctx.lineTo(-12, -4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(14, 8);
+        ctx.lineTo(6, 8);
+        ctx.closePath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(-14, 8);
+        ctx.lineTo(-6, 8);
+        ctx.closePath();
+        ctx.stroke();
+
+        const canopyGrad = ctx.createLinearGradient(0, -16, 0, 0);
+        canopyGrad.addColorStop(0, '#a5f3fc');
+        canopyGrad.addColorStop(1, '#0284c7');
+        ctx.fillStyle = canopyGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, -6, 5, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(-22, 2, 3, 10);
+        ctx.fillRect(19, 2, 3, 10);
+
+        if (this.shields > 0) {
+          let shieldColor = '#00f0ff';
+          if (this.shields === 2) shieldColor = '#ffdf00';
+          if (this.shields === 1) shieldColor = '#ff3344';
+
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = shieldColor;
+          ctx.strokeStyle = shieldColor;
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.5 + Math.sin(this.flameTimer * 0.4) * 0.2;
+
+          ctx.beginPath();
+          ctx.arc(0, -2, 34, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 6]);
+          ctx.beginPath();
+          ctx.arc(0, -2, 38, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        if (this.isOverheated) {
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ff3344';
+          ctx.fillStyle = '#ff3344';
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('OVERHEAT!', 0, -36);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // --- BULLET SYSTEM ---
+    class Bullet {
+      constructor(x, y, vx, vy, isPlayer = true, color = '#00f0ff', damage = 1, isPierce = false) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.isPlayer = isPlayer;
+        this.color = color;
+        this.damage = damage;
+        this.isPierce = isPierce;
+        this.radius = isPlayer ? 3.5 : 4;
+        this.active = true;
+      }
+
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        if (this.y < -30 || this.y > CANVAS_HEIGHT + 30 || this.x < -30 || this.x > CANVAS_WIDTH + 30) {
+          this.active = false;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = this.color;
+        ctx.fillStyle = this.color;
+
+        if (this.isPlayer) {
+          ctx.beginPath();
+          ctx.ellipse(this.x, this.y, this.radius * 0.8, this.radius * 2.8, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    // --- ENEMY ALIEN (DRONE, WASP, COMMANDER) ---
+    class AlienEnemy {
+      constructor(gridCol, gridRow, type = 'DRONE') {
+        this.gridCol = gridCol;
+        this.gridRow = gridRow;
+        this.type = type;
+
+        this.x = 0;
+        this.y = 0;
+        this.radius = 16;
+        this.active = true;
+        this.animTimer = Math.random() * 10;
+
+        if (type === 'COMMANDER') {
+          this.hp = 2;
+          this.maxHp = 2;
+          this.points = 200;
+          this.color = '#ffdf00';
+          this.isSpecial = Math.random() < 0.65;
+        } else if (type === 'WASP') {
+          this.hp = 1;
+          this.maxHp = 1;
+          this.points = 150;
+          this.color = '#38bdf8';
+          this.isSpecial = Math.random() < 0.25;
+        } else {
+          this.hp = 1;
+          this.maxHp = 1;
+          this.points = 100;
+          this.color = '#ff0077';
+          this.isSpecial = false;
+        }
+
+        this.isDiving = false;
+        this.diveT = 0;
+        this.diveDuration = 3.6;
+        this.diveCurve = null;
+        this.diveFired = false;
+        this.rotation = 0;
+      }
+
+      startDive(startX, startY, playerX, playerY) {
+        this.isDiving = true;
+        this.diveT = 0;
+        this.diveFired = false;
+        this.animTimer = 0;
+
+        const swoopDir = Math.random() < 0.5 ? -1 : 1;
+        const p0 = { x: startX, y: startY };
+        const p1 = { x: startX + swoopDir * (120 + Math.random() * 100), y: startY - 40 };
+        const p2 = { x: playerX + swoopDir * 60, y: playerY - 120 };
+        const p3 = { x: startX, y: -50 };
+
+        this.diveCurve = [p0, p1, p2, p3];
+        sound.playDiveSiren();
+      }
+
+      getBezierPoint(t, p0, p1, p2, p3) {
+        const u = 1 - t;
+        const tt = t * t;
+        const uu = u * u;
+        const uuu = uu * u;
+        const ttt = tt * t;
+
+        return {
+          x: uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x,
+          y: uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+        };
+      }
+
+      update(dt, formationPos, bullets, player) {
+        this.animTimer += dt * 5;
+
+        if (this.isDiving && this.diveCurve) {
+          this.diveT += dt / this.diveDuration;
+
+          if (this.diveT >= 1.0) {
+            this.isDiving = false;
+            this.diveCurve = null;
+            this.rotation = 0;
+          } else {
+            const p = this.getBezierPoint(this.diveT, ...this.diveCurve);
+            const nextP = this.getBezierPoint(Math.min(1.0, this.diveT + 0.02), ...this.diveCurve);
+
+            this.rotation = Math.atan2(nextP.y - p.y, nextP.x - p.x) - Math.PI / 2;
+            this.x = p.x;
+            this.y = p.y;
+
+            if (!this.diveFired && this.diveT > 0.45 && this.y < player.y - 100) {
+              this.diveFired = true;
+              const angle = Math.atan2(player.y - this.y, player.x - this.x);
+              const speed = 280;
+              bullets.push(new Bullet(this.x, this.y, Math.cos(angle) * speed, Math.sin(angle) * speed, false, '#ff0077'));
+              sound.playEnemyLaser();
+            }
+          }
+        } else {
+          this.x = formationPos.x + this.gridCol * 48;
+          this.y = formationPos.y + this.gridRow * 42;
+          this.rotation = 0;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        const wingFlap = Math.sin(this.animTimer) * 4;
+
+        if (this.isSpecial) {
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#00ff88';
+          ctx.strokeStyle = '#00ff88';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, 20 + Math.sin(this.animTimer * 2) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = '#0a0d1a';
+
+        if (this.type === 'COMMANDER') {
+          ctx.beginPath();
+          ctx.moveTo(0, -14);
+          ctx.lineTo(16, -6);
+          ctx.lineTo(18, 8 + wingFlap);
+          ctx.lineTo(8, 14);
+          ctx.lineTo(0, 10);
+          ctx.lineTo(-8, 14);
+          ctx.lineTo(-18, 8 + wingFlap);
+          ctx.lineTo(-16, -6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(-10, -6);
+          ctx.lineTo(-12, -16);
+          ctx.moveTo(10, -6);
+          ctx.lineTo(12, -16);
+          ctx.stroke();
+
+          ctx.fillStyle = this.hp === 1 ? '#ff3344' : '#ffdf00';
+          ctx.beginPath();
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
+          ctx.fill();
+
+        } else if (this.type === 'WASP') {
+          ctx.beginPath();
+          ctx.moveTo(0, -12);
+          ctx.lineTo(14, 0);
+          ctx.lineTo(18 + wingFlap, 12);
+          ctx.lineTo(6, 8);
+          ctx.lineTo(0, 14);
+          ctx.lineTo(-6, 8);
+          ctx.lineTo(-18 - wingFlap, 12);
+          ctx.lineTo(-14, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(-5, -4, 3, 5);
+          ctx.fillRect(2, -4, 3, 5);
+
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(-8, -12);
+          ctx.lineTo(8, -12);
+          ctx.lineTo(14, -4);
+          ctx.lineTo(16, 6 + wingFlap);
+          ctx.lineTo(10, 12);
+          ctx.lineTo(6, 6);
+          ctx.lineTo(-6, 6);
+          ctx.lineTo(-10, 12);
+          ctx.lineTo(-16, 6 + wingFlap);
+          ctx.lineTo(-14, -4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#ff0077';
+          ctx.beginPath();
+          ctx.arc(-5, -2, 2.5, 0, Math.PI * 2);
+          ctx.arc(5, -2, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // --- BOSS DREADNOUGHT ---
+    class BossDreadnought {
+      constructor(canvasWidth, wave) {
+        this.canvasWidth = canvasWidth;
+        this.x = canvasWidth / 2;
+        this.y = -150;
+        this.targetY = 160;
+        this.width = 160;
+        this.height = 110;
+        this.active = true;
+        this.intro = true;
+
+        const baseHp = 60 + wave * 25;
+        this.maxHp = baseHp;
+        this.hp = baseHp;
+        this.phase = 1;
+
+        this.vx = 90 + wave * 10;
+        this.animTimer = 0;
+
+        this.spreadTimer = 1.8;
+        this.laserTimer = 4.0;
+        this.laserCharging = false;
+        this.laserChargeTimer = 0;
+        this.laserActive = false;
+        this.laserActiveTimer = 0;
+        this.minionTimer = 5.0;
+
+        this.leftPodHp = Math.floor(baseHp * 0.25);
+        this.rightPodHp = Math.floor(baseHp * 0.25);
+      }
+
+      takeDamage(amount, hitX, hitY) {
+        if (this.intro) return false;
+
+        if (hitX < this.x - 45 && this.leftPodHp > 0) {
+          this.leftPodHp -= amount;
+        } else if (hitX > this.x + 45 && this.rightPodHp > 0) {
+          this.rightPodHp -= amount;
+        }
+
+        this.hp -= amount;
+        if (this.hp <= this.maxHp * 0.5 && this.phase === 1) {
+          this.phase = 2;
+          this.vx *= 1.35;
+          voice.speak("Watch out, watch out! Dreadnought entering Phase Two! Follow Captain Abhinav's command!", "RED ALERT", {
+            priority: true
+          });
+        }
+        return true;
+      }
+
+      update(dt, bullets, enemies, particles, player) {
+        this.animTimer += dt * 3;
+
+        if (this.intro) {
+          this.y += 120 * dt;
+          if (this.y >= this.targetY) {
+            this.y = this.targetY;
+            this.intro = false;
+            sound.playBossWarning();
+            voice.speak("Watch out! Watch out! Alien Dreadnought approaching! All wings, follow Captain Abhinav's command!", "FLEET COMMAND", {
+              priority: true
+            });
+          }
+          return;
+        }
+
+        this.x += this.vx * dt;
+        if (this.x < 110) {
+          this.x = 110;
+          this.vx = Math.abs(this.vx);
+        } else if (this.x > this.canvasWidth - 110) {
+          this.x = this.canvasWidth - 110;
+          this.vx = -Math.abs(this.vx);
+        }
+
+        this.spreadTimer -= dt;
+        if (this.spreadTimer <= 0) {
+          this.spreadTimer = this.phase === 2 ? 1.6 : 2.4;
+
+          const shots = this.phase === 2 ? 7 : 5;
+          const startAngle = Math.PI / 2 - 0.5;
+          const endAngle = Math.PI / 2 + 0.5;
+          const step = (endAngle - startAngle) / (shots - 1);
+
+          for (let i = 0; i < shots; i++) {
+            const angle = startAngle + step * i;
+            const speed = 230;
+            bullets.push(new Bullet(this.x, this.y + 40, Math.cos(angle) * speed, Math.sin(angle) * speed, false, '#ffdf00', 1));
+          }
+          sound.playEnemyLaser();
+        }
+
+        if (this.phase === 2) {
+          this.laserTimer -= dt;
+          if (this.laserTimer <= 0 && !this.laserCharging && !this.laserActive) {
+            this.laserCharging = true;
+            this.laserChargeTimer = 1.0;
+          }
+
+          if (this.laserCharging) {
+            this.laserChargeTimer -= dt;
+            if (this.laserChargeTimer <= 0) {
+              this.laserCharging = false;
+              this.laserActive = true;
+              this.laserActiveTimer = 1.6;
+              sound.playLaserShoot();
+            }
+          }
+
+          if (this.laserActive) {
+            this.laserActiveTimer -= dt;
+            const beamWidth = 28;
+            if (player.x > this.x - beamWidth / 2 && player.x < this.x + beamWidth / 2 && player.y > this.y) {
+              player.takeDamage(1);
+            }
+            if (this.laserActiveTimer <= 0) {
+              this.laserActive = false;
+              this.laserTimer = 5.0;
+            }
+          }
+
+          this.minionTimer -= dt;
+          if (this.minionTimer <= 0) {
+            this.minionTimer = 4.5;
+            const m1 = new AlienEnemy(0, 0, 'WASP');
+            m1.startDive(this.x - 60, this.y, player.x, player.y);
+            const m2 = new AlienEnemy(0, 0, 'WASP');
+            m2.startDive(this.x + 60, this.y, player.x, player.y);
+            enemies.push(m1, m2);
+          }
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (this.laserCharging) {
+          ctx.strokeStyle = 'rgba(255, 0, 119, 0.45)';
+          ctx.lineWidth = 3;
+          ctx.setLineDash([8, 8]);
+          ctx.beginPath();
+          ctx.moveTo(0, 40);
+          ctx.lineTo(0, CANVAS_HEIGHT);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        if (this.laserActive) {
+          ctx.shadowBlur = 25;
+          ctx.shadowColor = '#ff0077';
+          const laserGrad = ctx.createLinearGradient(-14, 0, 14, 0);
+          laserGrad.addColorStop(0, 'rgba(255, 0, 119, 0.2)');
+          laserGrad.addColorStop(0.5, '#ffffff');
+          laserGrad.addColorStop(1, 'rgba(255, 0, 119, 0.2)');
+
+          ctx.fillStyle = laserGrad;
+          ctx.fillRect(-14, 40, 28, CANVAS_HEIGHT - this.y);
+        }
+
+        ctx.shadowBlur = 18;
+        const mainColor = this.phase === 2 ? '#ff3344' : '#ffdf00';
+        ctx.shadowColor = mainColor;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3;
+        ctx.fillStyle = '#060a16';
+
+        ctx.beginPath();
+        ctx.moveTo(0, 48);
+        ctx.lineTo(40, 36);
+        ctx.lineTo(80, 16);
+        ctx.lineTo(95, -24);
+        ctx.lineTo(60, -42);
+        ctx.lineTo(30, -32);
+        ctx.lineTo(0, -48);
+        ctx.lineTo(-30, -32);
+        ctx.lineTo(-60, -42);
+        ctx.lineTo(-95, -24);
+        ctx.lineTo(-80, 16);
+        ctx.lineTo(-40, 36);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = this.leftPodHp > 0 ? '#00f0ff' : '#475569';
+        ctx.fillStyle = '#0a192f';
+        ctx.beginPath();
+        ctx.rect(-75, -10, 20, 32);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = this.rightPodHp > 0 ? '#00f0ff' : '#475569';
+        ctx.beginPath();
+        ctx.rect(55, -10, 20, 32);
+        ctx.fill();
+        ctx.stroke();
+
+        const coreColor = this.phase === 2 ? '#ff0077' : '#00ff88';
+        ctx.shadowColor = coreColor;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = coreColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18 + Math.sin(this.animTimer) * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        const barW = 380;
+        const barH = 14;
+        const barX = (this.canvasWidth - barW) / 2;
+        const barY = 54;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(10, 20, 40, 0.8)';
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.strokeRect(barX, barY, barW, barH);
+
+        const hpRatio = Math.max(0, this.hp / this.maxHp);
+        const fillGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+        fillGrad.addColorStop(0, this.phase === 2 ? '#ff3344' : '#ffdf00');
+        fillGrad.addColorStop(1, '#ff0077');
+        ctx.fillStyle = fillGrad;
+        ctx.fillRect(barX + 2, barY + 2, (barW - 4) * hpRatio, barH - 4);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(barX + barW * 0.5 - 1, barY, 2, barH);
+
+        ctx.font = 'bold 12px monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.fillText(`MOTHERSHIP DREADNOUGHT [PHASE ${this.phase}]`, this.canvasWidth / 2, barY - 6);
+        ctx.restore();
+      }
+    }
+
+    // --- POWERUP DROP ITEM ---
+    class PowerupItem {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.config = POWERUP_TYPES[type];
+        this.vy = 110;
+        this.radius = 16;
+        this.active = true;
+        this.animTimer = 0;
+      }
+
+      update(dt) {
+        this.y += this.vy * dt;
+        this.animTimer += dt * 6;
+        if (this.y > CANVAS_HEIGHT + 30) {
+          this.active = false;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = this.config.color;
+        ctx.strokeStyle = this.config.color;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = 'rgba(6, 12, 28, 0.9)';
+
+        const pulse = Math.sin(this.animTimer) * 2;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (i / 6) * Math.PI * 2;
+          const r = this.radius + pulse;
+          const px = Math.cos(angle) * r;
+          const py = Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = this.config.color;
+        ctx.font = '900 14px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.config.code, 0, 1);
+
+        ctx.restore();
+      }
+    }
+
+    // --- GALAGA GAME CONTROLLER ---
+    class GalagaGame {
+      constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+
+        this.state = STATE.START_SCREEN;
+        this.score = 0;
+        this.highScore = parseInt(localStorage.getItem('galaga_high_score') || '0', 10);
+        this.recordWave = parseInt(localStorage.getItem('galaga_record_wave') || '1', 10);
+        this.wave = 1;
+        this.totalKills = 0;
+
+        this.comboMultiplier = 1;
+        this.comboTimer = 0;
+        this.comboDuration = 2.6;
+        this.maxComboReached = 1;
+
+        this.waveBanner = null;
+        this.shakeTrauma = 0;
+
+        this.keys = { left: false, right: false, shoot: false };
+        this.mouseTargetX = null;
+
+        this.starfield = new Starfield(CANVAS_WIDTH, CANVAS_HEIGHT);
+        this.particles = new ParticleEngine();
+        this.floatTexts = new FloatingTextEngine();
+        this.player = new PlayerShip(CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        this.enemies = [];
+        this.bullets = [];
+        this.powerups = [];
+        this.boss = null;
+
+        this.formationPos = { x: 120, y: 110 };
+        this.formationVx = 70;
+        this.formationStepDown = 22;
+        this.formationMinX = 40;
+        this.formationMaxX = CANVAS_WIDTH - 480;
+
+        this.diveCooldown = 3.5;
+        this.diveTimer = 2.0;
+
+        this.lastTime = performance.now();
+
+        this.setupUI();
+        this.bindEvents();
+        this.initStartScreen();
+
+        requestAnimationFrame((t) => this.gameLoop(t));
+      }
+
+      setupUI() {
+        this.screenStart = document.getElementById('screen-start');
+        this.screenPause = document.getElementById('screen-pause');
+        this.screenGameOver = document.getElementById('screen-game-over');
+
+        this.overScoreEl = document.getElementById('over-score');
+        this.overHighScoreEl = document.getElementById('over-high-score');
+        this.overWaveEl = document.getElementById('over-wave');
+        this.overComboEl = document.getElementById('over-combo');
+        this.overKillsEl = document.getElementById('over-kills');
+
+        this.soundBtn = document.getElementById('btn-sound');
+        this.voiceBtn = document.getElementById('btn-voice');
+      }
+
+      bindEvents() {
+        const unlockAudioAndVoice = () => {
+          sound.init();
+        };
+
+        window.addEventListener('click', unlockAudioAndVoice, { once: true });
+        window.addEventListener('keydown', unlockAudioAndVoice, { once: true });
+        window.addEventListener('touchstart', unlockAudioAndVoice, { once: true });
+
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => {
+          sound.init();
+          if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.keys.left = true;
+          if (e.code === 'ArrowRight' || e.code === 'KeyD') this.keys.right = true;
+          if (e.code === 'Space') {
+            this.keys.shoot = true;
+            if (this.state === STATE.START_SCREEN || this.state === STATE.GAME_OVER) {
+              this.startNewGame();
+            }
+          }
+          if (e.code === 'KeyP' || e.code === 'Escape') this.togglePause();
+          if (e.code === 'KeyM') this.toggleSound();
+          if (e.code === 'KeyV') this.toggleVoice();
+        });
+
+        window.addEventListener('keyup', (e) => {
+          if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.keys.left = false;
+          if (e.code === 'ArrowRight' || e.code === 'KeyD') this.keys.right = false;
+          if (e.code === 'Space') this.keys.shoot = false;
+        });
+
+        // Mouse/Touch Drag Controls
+        const getCanvasCoordX = (clientX) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const scale = CANVAS_WIDTH / rect.width;
+          return (clientX - rect.left) * scale;
+        };
+
+        this.canvas.addEventListener('mousemove', (e) => {
+          if (this.state === STATE.PLAYING) {
+            this.mouseTargetX = getCanvasCoordX(e.clientX);
+          }
+        });
+
+        this.canvas.addEventListener('mousedown', () => {
+          sound.init();
+          this.keys.shoot = true;
+        });
+
+        window.addEventListener('mouseup', () => {
+          this.keys.shoot = false;
+        });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+          if (this.state === STATE.PLAYING && e.touches.length > 0) {
+            this.mouseTargetX = getCanvasCoordX(e.touches[0].clientX);
+          }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchstart', (e) => {
+          sound.init();
+          this.keys.shoot = true;
+          if (e.touches.length > 0) {
+            this.mouseTargetX = getCanvasCoordX(e.touches[0].clientX);
+          }
+        });
+
+        this.canvas.addEventListener('touchend', () => {
+          this.keys.shoot = false;
+        });
+
+        // UI Buttons
+        document.getElementById('btn-start').addEventListener('click', () => {
+          sound.init();
+          this.startNewGame();
+        });
+
+        document.getElementById('btn-resume').addEventListener('click', () => {
+          this.togglePause();
+        });
+
+        document.getElementById('btn-restart-from-pause').addEventListener('click', () => {
+          this.startNewGame();
+        });
+
+        document.getElementById('btn-play-again').addEventListener('click', () => {
+          sound.init();
+          this.startNewGame();
+        });
+
+        document.getElementById('btn-pause').addEventListener('click', () => {
+          this.togglePause();
+        });
+
+        this.soundBtn.addEventListener('click', () => {
+          sound.init();
+          this.toggleSound();
+        });
+
+        this.voiceBtn.addEventListener('click', () => {
+          this.toggleVoice();
+        });
+
+        // Mobile touch buttons
+        const touchLeft = document.getElementById('touch-left');
+        const touchRight = document.getElementById('touch-right');
+        const touchFire = document.getElementById('touch-fire');
+
+        const bindTouch = (el, pressAction, releaseAction) => {
+          el.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            sound.init();
+            pressAction();
+          });
+          el.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            releaseAction();
+          });
+        };
+
+        bindTouch(touchLeft, () => this.keys.left = true, () => this.keys.left = false);
+        bindTouch(touchRight, () => this.keys.right = true, () => this.keys.right = false);
+        bindTouch(touchFire, () => {
+          this.keys.shoot = true;
+          if (this.state === STATE.START_SCREEN || this.state === STATE.GAME_OVER) {
+            this.startNewGame();
+          }
+        }, () => this.keys.shoot = false);
+      }
+
+      initStartScreen() {
+        this.state = STATE.START_SCREEN;
+        this.screenStart.classList.remove('hidden');
+        this.screenPause.classList.add('hidden');
+        this.screenGameOver.classList.add('hidden');
+
+        // Play intro speech preview
+        setTimeout(() => {
+          voice.speak("Wow! Captain Abhinav is coming! Watch out! Watch out! Follow Captain's command!", "FLEET COMMAND");
+        }, 600);
+      }
+
+      togglePause() {
+        if (this.state === STATE.PLAYING) {
+          this.state = STATE.PAUSED;
+          this.screenPause.classList.remove('hidden');
+          voice.speak("Combat paused. Standing by for Captain Abhinav.", "TACTICAL COMM");
+        } else if (this.state === STATE.PAUSED) {
+          this.state = STATE.PLAYING;
+          this.screenPause.classList.add('hidden');
+          this.lastTime = performance.now();
+          voice.speak("Combat resumed! All wings, follow Captain Abhinav's command!", "TACTICAL COMM");
+        }
+      }
+
+      toggleSound() {
+        const isMuted = sound.toggleMute();
+        this.soundBtn.textContent = isMuted ? '🔇' : '🔊';
+      }
+
+      toggleVoice() {
+        const isVoiceOn = voice.toggleVoice();
+        this.voiceBtn.textContent = isVoiceOn ? '🎙️' : '🔇';
+        if (isVoiceOn) {
+          voice.speak("Captain Abhinav voice comms re-engaged! Follow Captain's command!", "FLEET COMM");
+        }
+      }
+
+      startNewGame() {
+        this.state = STATE.PLAYING;
+        this.score = 0;
+        this.wave = 1;
+        this.totalKills = 0;
+        this.comboMultiplier = 1;
+        this.comboTimer = 0;
+        this.maxComboReached = 1;
+        this.bullets = [];
+        this.powerups = [];
+        this.player.reset();
+
+        this.screenStart.classList.add('hidden');
+        this.screenPause.classList.add('hidden');
+        this.screenGameOver.classList.add('hidden');
+
+        this.spawnWave(this.wave);
+        this.lastTime = performance.now();
+
+        // Celebratory voice kickoff
+        voice.speak("Wow! Captain Abhinav is coming! Watch out, watch out! All wings, follow Captain Abhinav's command!", "FLEET COMMAND", {
+          priority: true
+        });
+      }
+
+      triggerGameOver() {
+        this.state = STATE.GAME_OVER;
+        sound.playExplosion('player');
+        this.shakeTrauma = 1.0;
+
+        voice.speak("Recon ship lost! Well done, Captain Abhinav, you fought heroically! Ready for redeployment!", "FLEET STATUS", {
+          priority: true
+        });
+
+        if (this.score > this.highScore) {
+          this.highScore = this.score;
+          localStorage.setItem('galaga_high_score', this.highScore.toString());
+        }
+        if (this.wave > this.recordWave) {
+          this.recordWave = this.wave;
+          localStorage.setItem('galaga_record_wave', this.recordWave.toString());
+        }
+
+        this.overScoreEl.textContent = this.formatScore(this.score);
+        this.overHighScoreEl.textContent = this.formatScore(this.highScore);
+        this.overWaveEl.textContent = this.wave;
+        this.overComboEl.textContent = `${this.maxComboReached}x`;
+        this.overKillsEl.textContent = this.totalKills;
+
+        this.screenGameOver.classList.remove('hidden');
+      }
+
+      spawnWave(waveNum) {
+        this.enemies = [];
+        this.bullets = [];
+        this.boss = null;
+
+        const isBossWave = waveNum % 3 === 0;
+        this.waveBanner = {
+          title: isBossWave ? 'WARNING: BOSS DREADNOUGHT' : `WAVE ${waveNum}`,
+          sub: isBossWave ? 'MOTHERSHIP ENGAGEMENT IMMINENT' : 'INVASION FLEET DETECTED',
+          timer: 2.8,
+          color: isBossWave ? '#ff3344' : '#00f0ff'
+        };
+
+        if (isBossWave) {
+          this.boss = new BossDreadnought(CANVAS_WIDTH, waveNum);
+        } else {
+          const cols = 8;
+          const rows = 5;
+          this.formationPos = { x: 120, y: 110 };
+
+          const baseSpeed = 65 + (waveNum - 1) * 12;
+          this.formationVx = baseSpeed;
+          this.diveCooldown = Math.max(1.6, 3.8 - (waveNum - 1) * 0.3);
+          this.diveTimer = 2.0;
+
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              let type = 'DRONE';
+              if (r === 0) type = 'COMMANDER';
+              else if (r === 1 || r === 2) type = 'WASP';
+              this.enemies.push(new AlienEnemy(c, r, type));
+            }
+          }
+
+          if (waveNum > 1) {
+            voice.speak(`Wave ${waveNum} detected! Follow Captain Abhinav's command!`, "TACTICAL RADAR", {
+              minInterval: 4000,
+              key: `wave_${waveNum}`
+            });
+          }
+        }
+      }
+
+      firePlayerWeapons() {
+        if (!this.player.canShoot()) return;
+
+        const p = this.player;
+        p.registerShot();
+
+        if (p.activePowerups.laser > 0) {
+          const laserBullet = new Bullet(p.x, p.y - 30, 0, -1200, true, '#ff0077', 1.5, true);
+          this.bullets.push(laserBullet);
+          sound.playLaserShoot();
+          this.particles.emit(p.x, p.y - 25, 4, { color: '#ff0077', speedMin: 40, speedMax: 90 });
+        } else if (p.activePowerups.triple > 0) {
+          const speed = 720;
+          const ang = 0.22;
+          this.bullets.push(
+            new Bullet(p.x, p.y - 20, 0, -speed, true, '#00f0ff', 1),
+            new Bullet(p.x - 14, p.y - 12, -Math.sin(ang) * speed, -Math.cos(ang) * speed, true, '#00f0ff', 1),
+            new Bullet(p.x + 14, p.y - 12, Math.sin(ang) * speed, -Math.cos(ang) * speed, true, '#00f0ff', 1)
+          );
+          sound.playTripleShoot();
+        } else {
+          const speed = 680;
+          this.bullets.push(
+            new Bullet(p.x - 18, p.y - 14, 0, -speed, true, '#00f0ff', 1),
+            new Bullet(p.x + 18, p.y - 14, 0, -speed, true, '#00f0ff', 1)
+          );
+          sound.playLaserShoot();
+        }
+      }
+
+      incrementCombo(x, y) {
+        this.comboTimer = this.comboDuration;
+        const prev = this.comboMultiplier;
+        if (this.comboMultiplier < 8) {
+          this.comboMultiplier = this.comboMultiplier === 1 ? 2 : this.comboMultiplier === 2 ? 4 : 8;
+        }
+        if (this.comboMultiplier > this.maxComboReached) {
+          this.maxComboReached = this.comboMultiplier;
+        }
+
+        // Voice line for high combo streaks
+        if (this.comboMultiplier >= 4 && prev < this.comboMultiplier) {
+          voice.speak(`Well done, Captain Abhinav! Combo ${this.comboMultiplier}x multiplier active!`, "COMBO COMM", {
+            minInterval: 5000,
+            key: 'combo_alert'
+          });
+        }
+      }
+
+      spawnPowerup(x, y) {
+        const types = ['TRIPLE', 'LASER', 'SHIELD', 'OVERCLOCK'];
+        const chosen = types[Math.floor(Math.random() * types.length)];
+        this.powerups.push(new PowerupItem(x, y, chosen));
+      }
+
+      update(dt) {
+        if (this.shakeTrauma > 0) {
+          this.shakeTrauma = Math.max(0, this.shakeTrauma - dt * 2.2);
+        }
+
+        this.starfield.update(dt);
+        this.particles.update(dt);
+        this.floatTexts.update(dt);
+
+        if (this.state !== STATE.PLAYING) return;
+
+        if (this.waveBanner) {
+          this.waveBanner.timer -= dt;
+          if (this.waveBanner.timer <= 0) {
+            this.waveBanner = null;
+          }
+        }
+
+        if (this.comboTimer > 0) {
+          this.comboTimer -= dt;
+          if (this.comboTimer <= 0) {
+            this.comboMultiplier = 1;
+          }
+        }
+
+        this.player.update(dt, this.keys, this.mouseTargetX, this.particles);
+        if (this.keys.shoot) {
+          this.firePlayerWeapons();
+        }
+
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+          const b = this.bullets[i];
+          b.update(dt);
+          if (!b.active) {
+            this.bullets.splice(i, 1);
+          }
+        }
+
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+          const item = this.powerups[i];
+          item.update(dt);
+          if (!item.active) {
+            this.powerups.splice(i, 1);
+            continue;
+          }
+
+          const dist = Math.hypot(item.x - this.player.x, item.y - this.player.y);
+          if (dist < item.radius + 24) {
+            this.player.applyPowerup(item.type);
+            this.floatTexts.add(this.player.x, this.player.y - 30, `+${item.config.name}`, item.config.color, 18);
+            this.particles.emit(item.x, item.y, 16, { color: item.config.color });
+            sound.playPowerup();
+
+            voice.speak(`Well done, Captain Abhinav! ${item.config.name} online! Follow Captain's command!`, "FLEET LOGISTICS", {
+              minInterval: 4000,
+              key: 'powerup_voice'
+            });
+
+            this.powerups.splice(i, 1);
+          }
+        }
+
+        // Boss Logic
+        if (this.boss && this.boss.active) {
+          this.boss.update(dt, this.bullets, this.enemies, this.particles, this.player);
+
+          for (const b of this.bullets) {
+            if (!b.isPlayer || !b.active) continue;
+
+            const hitX = b.x;
+            const hitY = b.y;
+            if (hitX > this.boss.x - 85 && hitX < this.boss.x + 85 &&
+                hitY > this.boss.y - 45 && hitY < this.boss.y + 45) {
+
+              const damaged = this.boss.takeDamage(b.damage, hitX, hitY);
+              if (damaged) {
+                if (!b.isPierce) b.active = false;
+                this.particles.emit(hitX, hitY, 5, { color: '#ffdf00', speedMin: 40, speedMax: 120 });
+
+                if (this.boss.hp <= 0) {
+                  this.boss.active = false;
+                  sound.playExplosion('boss');
+                  this.shakeTrauma = 1.0;
+                  this.particles.emit(this.boss.x, this.boss.y, 70, { color: '#ff3344', speedMax: 350 });
+                  this.particles.emitRing(this.boss.x, this.boss.y, 30, '#ffdf00');
+
+                  const bossPts = 3000 * this.comboMultiplier;
+                  this.score += bossPts;
+                  this.floatTexts.add(this.boss.x, this.boss.y, `BOSS DESTROYED! +${bossPts}`, '#ffdf00', 22);
+
+                  voice.speak("Well done, Captain Abhinav! Alien Dreadnought neutralized! Outstanding victory!", "FLEET HQ", {
+                    priority: true
+                  });
+
+                  this.spawnPowerup(this.boss.x - 40, this.boss.y);
+                  this.spawnPowerup(this.boss.x + 40, this.boss.y);
+
+                  setTimeout(() => {
+                    this.wave++;
+                    this.spawnWave(this.wave);
+                  }, 2200);
+                  break;
+                }
+              }
+            }
+          }
+
+        } else if (!this.boss) {
+          // Swarm Logic
+          const aliveEnemies = this.enemies.filter(e => e.active);
+
+          if (aliveEnemies.length === 0) {
+            voice.speak("Well done, Captain Abhinav! Sector cleared! Prepare for next wave!", "FLEET COMMAND", {
+              priority: true
+            });
+            this.wave++;
+            this.spawnWave(this.wave);
+            return;
+          }
+
+          const speedFactor = 1.0 + (1.0 - (aliveEnemies.length / 40)) * 2.2;
+          const currentFormationSpeed = this.formationVx * speedFactor;
+
+          this.formationPos.x += currentFormationSpeed * dt;
+
+          if (this.formationPos.x > this.formationMaxX) {
+            this.formationPos.x = this.formationMaxX;
+            this.formationVx = -Math.abs(this.formationVx);
+            this.formationPos.y += this.formationStepDown;
+          } else if (this.formationPos.x < this.formationMinX) {
+            this.formationPos.x = this.formationMinX;
+            this.formationVx = Math.abs(this.formationVx);
+            this.formationPos.y += this.formationStepDown;
+          }
+
+          // Dive Bomber
+          this.diveTimer -= dt;
+          if (this.diveTimer <= 0) {
+            this.diveTimer = this.diveCooldown;
+            const nonDiving = aliveEnemies.filter(e => !e.isDiving);
+            if (nonDiving.length > 0) {
+              const attacker = nonDiving[Math.floor(Math.random() * nonDiving.length)];
+              attacker.startDive(attacker.x, attacker.y, this.player.x, this.player.y);
+
+              // Voice trigger for dive attack
+              voice.speak("Watch out! Watch out! Dive-bombers incoming! Follow Captain's command!", "TACTICAL RADAR", {
+                minInterval: 8000,
+                key: 'dive_bomber_alert'
+              });
+            }
+          }
+
+          for (const enemy of aliveEnemies) {
+            enemy.update(dt, this.formationPos, this.bullets, this.player);
+
+            const pDist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
+            if (pDist < enemy.radius + 18) {
+              const damaged = this.player.takeDamage(1);
+              if (damaged) {
+                this.shakeTrauma = 0.7;
+                sound.playExplosion('small');
+                this.particles.emit(this.player.x, this.player.y, 25, { color: '#ff3344' });
+
+                if (this.player.shields > 0) {
+                  voice.speak("Watch out, Captain Abhinav! Shield hit!", "DAMAGE ALERT", {
+                    minInterval: 4000,
+                    key: 'shield_hit'
+                  });
+                }
+
+                if (this.player.shields <= 0) {
+                  this.triggerGameOver();
+                  return;
+                }
+              }
+            }
+
+            if (enemy.y >= this.player.y - 10 && !enemy.isDiving) {
+              this.triggerGameOver();
+              return;
+            }
+          }
+
+          // Bullets hitting Swarm
+          for (const b of this.bullets) {
+            if (!b.isPlayer || !b.active) continue;
+
+            for (const enemy of aliveEnemies) {
+              if (!enemy.active) continue;
+
+              const dist = Math.hypot(b.x - enemy.x, b.y - enemy.y);
+              if (dist < enemy.radius + b.radius + 4) {
+                if (!b.isPierce) b.active = false;
+                enemy.hp -= b.damage;
+
+                if (enemy.hp <= 0) {
+                  enemy.active = false;
+                  this.totalKills++;
+                  this.incrementCombo(enemy.x, enemy.y);
+
+                  const basePoints = enemy.isDiving ? enemy.points * 2 : enemy.points;
+                  const earned = basePoints * this.comboMultiplier;
+                  this.score += earned;
+
+                  sound.playExplosion('small');
+                  this.particles.emit(enemy.x, enemy.y, 18, { color: enemy.color });
+                  this.floatTexts.add(
+                    enemy.x,
+                    enemy.y,
+                    `+${earned}${this.comboMultiplier > 1 ? ` (${this.comboMultiplier}x)` : ''}`,
+                    enemy.color,
+                    14
+                  );
+
+                  if (enemy.isSpecial || Math.random() < 0.08) {
+                    this.spawnPowerup(enemy.x, enemy.y);
+                  }
+                } else {
+                  this.particles.emit(b.x, b.y, 4, { color: '#ffdf00' });
+                }
+                break;
+              }
+            }
+          }
+        }
+
+        // Alien bullets hitting player
+        for (const b of this.bullets) {
+          if (b.isPlayer || !b.active) continue;
+
+          const dist = Math.hypot(b.x - this.player.x, b.y - this.player.y);
+          if (dist < b.radius + 18) {
+            b.active = false;
+            const damaged = this.player.takeDamage(1);
+            if (damaged) {
+              this.shakeTrauma = 0.6;
+              sound.playExplosion('small');
+              this.particles.emit(this.player.x, this.player.y, 20, { color: '#ff3344' });
+
+              if (this.player.shields > 0) {
+                voice.speak("Watch out, Captain Abhinav! Hull taking fire!", "DAMAGE ALERT", {
+                  minInterval: 4000,
+                  key: 'hull_fire'
+                });
+              }
+
+              if (this.player.shields <= 0) {
+                this.triggerGameOver();
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      draw() {
+        this.ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        this.ctx.save();
+        if (this.shakeTrauma > 0) {
+          const shakeAmount = Math.pow(this.shakeTrauma, 2) * 16;
+          const offsetX = (Math.random() * 2 - 1) * shakeAmount;
+          const offsetY = (Math.random() * 2 - 1) * shakeAmount;
+          this.ctx.translate(offsetX, offsetY);
+        }
+
+        this.starfield.draw(this.ctx);
+
+        for (const item of this.powerups) {
+          item.draw(this.ctx);
+        }
+
+        for (const enemy of this.enemies) {
+          if (enemy.active) enemy.draw(this.ctx);
+        }
+
+        if (this.boss && this.boss.active) {
+          this.boss.draw(this.ctx);
+        }
+
+        for (const b of this.bullets) {
+          b.draw(this.ctx);
+        }
+
+        if (this.state === STATE.PLAYING || this.state === STATE.PAUSED) {
+          this.player.draw(this.ctx);
+        }
+
+        this.particles.draw(this.ctx);
+        this.floatTexts.draw(this.ctx);
+
+        this.ctx.restore();
+
+        if (this.state === STATE.PLAYING || this.state === STATE.PAUSED) {
+          this.drawHUD();
+        }
+      }
+
+      drawHUD() {
+        const ctx = this.ctx;
+        ctx.save();
+
+        ctx.font = 'bold 15px "Courier New", monospace';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('SCORE', 24, 28);
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = '#00f0ff';
+        ctx.fillText(this.formatScore(this.score), 24, 46);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.shadowBlur = 0;
+        ctx.fillText('HIGH', 160, 28);
+        ctx.fillStyle = '#ffdf00';
+        ctx.fillText(this.formatScore(Math.max(this.score, this.highScore)), 160, 46);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('WAVE', 280, 28);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${this.wave}`, 280, 46);
+
+        if (this.comboMultiplier > 1) {
+          const comboX = CANVAS_WIDTH - 120;
+          ctx.font = 'bold 18px "Courier New", monospace';
+          ctx.fillStyle = '#ffdf00';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#ffdf00';
+          ctx.fillText(`COMBO ${this.comboMultiplier}x`, comboX, 32);
+
+          const barW = 75;
+          const ratio = Math.max(0, this.comboTimer / this.comboDuration);
+          ctx.fillStyle = 'rgba(255, 223, 0, 0.2)';
+          ctx.fillRect(comboX, 38, barW, 4);
+          ctx.fillStyle = '#ffdf00';
+          ctx.fillRect(comboX, 38, barW * ratio, 4);
+        }
+
+        const shieldY = CANVAS_HEIGHT - 24;
+        ctx.font = '13px monospace';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('SHIELDS', 24, shieldY);
+
+        for (let i = 0; i < this.player.maxShields; i++) {
+          const isFull = i < this.player.shields;
+          ctx.strokeStyle = isFull ? '#00f0ff' : '#334155';
+          ctx.fillStyle = isFull ? '#00f0ff' : 'transparent';
+          ctx.shadowBlur = isFull ? 8 : 0;
+          ctx.shadowColor = '#00f0ff';
+
+          ctx.beginPath();
+          ctx.arc(104 + i * 22, shieldY - 5, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          if (isFull) ctx.fill();
+        }
+
+        const heatW = 160;
+        const heatH = 10;
+        const heatX = (CANVAS_WIDTH - heatW) / 2;
+        const heatY = CANVAS_HEIGHT - 28;
+
+        ctx.fillStyle = 'rgba(10, 20, 35, 0.7)';
+        ctx.strokeStyle = this.player.isOverheated ? '#ff3344' : '#38bdf8';
+        ctx.lineWidth = 1;
+        ctx.fillRect(heatX, heatY, heatW, heatH);
+        ctx.strokeRect(heatX, heatY, heatW, heatH);
+
+        const heatRatio = this.player.heat / 100;
+        const heatGrad = ctx.createLinearGradient(heatX, 0, heatX + heatW, 0);
+        heatGrad.addColorStop(0, '#00f0ff');
+        heatGrad.addColorStop(0.65, '#ffdf00');
+        heatGrad.addColorStop(1, '#ff3344');
+
+        ctx.fillStyle = this.player.isOverheated ? '#ff3344' : heatGrad;
+        ctx.fillRect(heatX + 1, heatY + 1, (heatW - 2) * heatRatio, heatH - 2);
+
+        ctx.font = '10px monospace';
+        ctx.fillStyle = this.player.isOverheated ? '#ff3344' : '#94a3b8';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.player.isOverheated ? 'OVERHEATED' : 'HEAT GAUGE', CANVAS_WIDTH / 2, heatY - 4);
+        ctx.textAlign = 'left';
+
+        let badgeOffset = 0;
+        const p = this.player;
+
+        if (p.activePowerups.laser > 0) {
+          this.drawPowerupBadge(CANVAS_WIDTH - 40 - badgeOffset, CANVAS_HEIGHT - 32, 'LASER', p.activePowerups.laser, '#ff0077');
+          badgeOffset += 44;
+        }
+        if (p.activePowerups.triple > 0) {
+          this.drawPowerupBadge(CANVAS_WIDTH - 40 - badgeOffset, CANVAS_HEIGHT - 32, 'TRIPLE', p.activePowerups.triple, '#00f0ff');
+          badgeOffset += 44;
+        }
+        if (p.activePowerups.overclock > 0) {
+          this.drawPowerupBadge(CANVAS_WIDTH - 40 - badgeOffset, CANVAS_HEIGHT - 32, 'CLOCK', p.activePowerups.overclock, '#ffdf00');
+          badgeOffset += 44;
+        }
+
+        if (this.waveBanner) {
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.fillStyle = this.waveBanner.color;
+          ctx.font = '900 28px "Courier New", monospace';
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = this.waveBanner.color;
+          ctx.fillText(this.waveBanner.title, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 30);
+
+          ctx.font = 'bold 14px "Courier New", monospace';
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 6;
+          ctx.fillText(this.waveBanner.sub, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+          ctx.restore();
+        }
+
+        ctx.restore();
+      }
+
+      drawPowerupBadge(x, y, label, duration, color) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.ceil(duration).toString(), x, y);
+        ctx.restore();
+      }
+
+      formatScore(num) {
+        return num.toString().padStart(5, '0');
+      }
+
+      gameLoop(currentTime) {
+        let dt = (currentTime - this.lastTime) / 1000;
+        this.lastTime = currentTime;
+
+        if (dt > 0.1) dt = 0.1;
+
+        this.update(dt);
+        this.draw();
+
+        requestAnimationFrame((t) => this.gameLoop(t));
+      }
+    }
+
+    function initArcadeGame() {
+      if (!window.__galagaArcadeGame) {
+        window.__galagaArcadeGame = new GalagaGame();
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initArcadeGame);
+    } else {
+      initArcadeGame();
+    }
+  </script>
+</body>
+</html>
